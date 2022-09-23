@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import math
 from utils import sparse_dropout, spmm
 
 class EMGCL(nn.Module):

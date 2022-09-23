@@ -1,10 +1,8 @@
 import numpy as np
 import torch
-import torch.nn as nn
 import pickle
 from model import EMGCL
 from utils import metrics, scipy_sparse_mat_to_torch_sparse_tensor
-import matplotlib.pyplot as plt
 import pandas as pd
 from parser import args
 from tqdm import tqdm
