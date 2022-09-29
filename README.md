@@ -1,4 +1,4 @@
-# EMGCL
+# LightGCL
 This is the PyTorch implementation for LightGCL proposed in the paper *Simple Yet Effective Graph Contrastive Learning for Recommendation* submitted to ICLR 2023.
 
 ### 1. Note on datasets and directories
