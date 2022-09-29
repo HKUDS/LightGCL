@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 import pickle
-from model import EMGCL
+from model import LightGCL
 from utils import metrics, scipy_sparse_mat_to_torch_sparse_tensor
 import pandas as pd
 from parser import args
@@ -72,7 +72,7 @@ ndcg_20_y = []
 recall_40_y = []
 ndcg_40_y = []
 
-model = EMGCL(adj_norm.shape[0], adj_norm.shape[1], d, u_mul_s, v_mul_s, svd_u.T, svd_v.T, train_csr, adj_norm, l, temp, lambda_1, dropout, batch_user, device)
+model = LightGCL(adj_norm.shape[0], adj_norm.shape[1], d, u_mul_s, v_mul_s, svd_u.T, svd_v.T, train_csr, adj_norm, l, temp, lambda_1, dropout, batch_user, device)
 #model.load_state_dict(torch.load('saved_model.pt'))
 model.cuda(torch.device(device))
 optimizer = torch.optim.Adam(model.parameters(),weight_decay=lambda_2,lr=lr)

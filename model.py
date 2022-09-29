@@ -2,9 +2,9 @@ import torch
 import torch.nn as nn
 from utils import sparse_dropout, spmm
 
-class EMGCL(nn.Module):
+class LightGCL(nn.Module):
     def __init__(self, n_u, n_i, d, u_mul_s, v_mul_s, ut, vt, train_csr, adj_norm, l, temp, lambda_1, dropout, batch_user, device):
-        super(EMGCL,self).__init__()
+        super(LightGCL,self).__init__()
         self.E_u_0 = nn.Parameter(nn.init.xavier_uniform_(torch.empty(n_u,d)))
         self.E_i_0 = nn.Parameter(nn.init.xavier_uniform_(torch.empty(n_i,d)))
 
