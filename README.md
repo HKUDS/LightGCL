@@ -1,5 +1,5 @@
 # LightGCL
-This is the PyTorch implementation for LightGCL proposed in the paper *Simple Yet Effective Graph Contrastive Learning for Recommendation* submitted to ICLR 2023.
+This is the PyTorch implementation for LightGCL proposed in the paper **Simple Yet Effective Graph Contrastive Learning for Recommendation**, *International Conference on Learning Representation*, 2023.
 
 ### 1. Note on datasets and directories
 Due to the large size of datasets *ML-10M*, *Amazon* and *Tmall*, we have compressed them into zip files. Please unzip them before running the model on these datasets. For *Yelp* and *Gowalla*, keeping the current directory structure is fine.
