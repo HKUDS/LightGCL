@@ -57,3 +57,12 @@ python main.py --data tmall --lambda1 1e-6 --temp 0.3 --dropout 0
 * `--temp` specifies $\tau$, the temperature in CL loss.
 * `--dropout` is the edge dropout rate.
 * `--q` decides the rank q for SVD.
+
+### 5. Citing our paper
+```
+@inproceedings{caisimple,
+  title={Simple Yet Effective Graph Contrastive Learning for Recommendation},
+  author={Cai, Xuheng and Huang, Chao and Xia, Lianghao and Ren, Xubin},
+  booktitle={International Conference on Learning Representations}
+}
+```
