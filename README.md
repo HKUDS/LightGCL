@@ -1,5 +1,12 @@
 # LightGCL
-This is the PyTorch implementation for LightGCL proposed in the paper **Simple Yet Effective Graph Contrastive Learning for Recommendation**, *International Conference on Learning Representation*, 2023.
+This is the PyTorch implementation for LightGCL proposed in the paper [**LightGCL: Simple Yet Effective Graph Contrastive Learning for Recommendation**](https://openreview.net/forum?id=FKXVK9dyMM), *International Conference on Learning Representation*, 2023.
+
+<br>
+<p align='center'>
+<img src="https://user-images.githubusercontent.com/60952950/219573564-64d5e9cc-6dbc-4cc9-b115-95fb6d46f1a7.png"  width="600" height="300"><br>
+<i> Fig: Model Structure of LightGCL </i>
+</p>
+
 
 ### 1. Note on datasets and directories
 Due to the large size of datasets *ML-10M*, *Amazon* and *Tmall*, we have compressed them into zip files. Please unzip them before running the model on these datasets. For *Yelp* and *Gowalla*, keeping the current directory structure is fine.
@@ -58,7 +65,22 @@ python main.py --data tmall --lambda1 1e-6 --temp 0.3 --dropout 0
 * `--dropout` is the edge dropout rate.
 * `--q` decides the rank q for SVD.
 
-### 5. Citing our paper
+### 5. Experimental Results
+
+<br>
+<p align='center'>
+<img src="https://user-images.githubusercontent.com/60952950/219574814-3577b750-ffe1-4e38-9c7c-999625b4338c.png"  width="600" height="300"><br>
+<i> Fig: Experimental Results </i>
+</p>
+<br>
+<p align='center'>
+<img src="https://user-images.githubusercontent.com/60952950/219574865-232c2419-87f9-45d4-8cfb-2a1d9088c907.png"  width="450" height="300"><br>
+<i> Fig: Experimental Results (cont') </i>
+</p>
+
+*Note: More details for settings can be found in our paper.*
+
+### 6. Citing our paper
 ```
 @inproceedings{caisimple,
   title={Simple Yet Effective Graph Contrastive Learning for Recommendation},
