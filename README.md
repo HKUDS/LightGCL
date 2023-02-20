@@ -83,8 +83,9 @@ python main.py --data tmall --lambda1 1e-6 --temp 0.3 --dropout 0
 ### 6. Citing our paper
 ```
 @inproceedings{caisimple,
-  title={Simple Yet Effective Graph Contrastive Learning for Recommendation},
+  title={LightGCL: Simple Yet Effective Graph Contrastive Learning for Recommendation},
   author={Cai, Xuheng and Huang, Chao and Xia, Lianghao and Ren, Xubin},
-  booktitle={International Conference on Learning Representations}
+  booktitle={International Conference on Learning Representations (ICLR)},
+  year={2023}
 }
 ```
