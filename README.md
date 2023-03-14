@@ -87,7 +87,7 @@ Please kindly cite our paper if you find this paper and the codes helpful.
 @inproceedings{caisimple,
   title={LightGCL: Simple Yet Effective Graph Contrastive Learning for Recommendation},
   author={Cai, Xuheng and Huang, Chao and Xia, Lianghao and Ren, Xubin},
-  booktitle={International Conference on Learning Representations (ICLR)},
+  booktitle={The Eleventh International Conference on Learning Representations},
   year={2023}
 }
 ```
