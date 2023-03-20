@@ -34,26 +34,9 @@ python main.py --data yelp
 * Gowalla
 
 ```
-python main.py --data gowalla --lambda2 1e-5 --temp 0.3
+python main.py --data gowalla --lambda2 0
 ```
 
-* ML-10M
-
-```
-python main.py --data ml10m --temp 10
-```
-
-* Amazon
-
-```
-python main.py --data amazon --lambda1 1e-5 --temp 0.1
-```
-
-* Tmall
-
-```
-python main.py --data tmall --lambda1 1e-6 --temp 0.3 --dropout 0
-```
 
 ### 4. Some configurable arguments
 
@@ -65,20 +48,11 @@ python main.py --data tmall --lambda1 1e-6 --temp 0.3 --dropout 0
 * `--dropout` is the edge dropout rate.
 * `--q` decides the rank q for SVD.
 
-### 5. Experimental Results
+### 5. On the complexity of LightGCL
 
-<br>
-<p align='center'>
-<img src="https://user-images.githubusercontent.com/60952950/219574814-3577b750-ffe1-4e38-9c7c-999625b4338c.png"  width="600" height="300"><br>
-<i> Fig: Experimental Results </i>
-</p>
-<br>
-<p align='center'>
-<img src="https://user-images.githubusercontent.com/60952950/219574865-232c2419-87f9-45d4-8cfb-2a1d9088c907.png"  width="450" height="300"><br>
-<i> Fig: Experimental Results (cont') </i>
-</p>
+We notice that many readers are confused about the complexity of performing graph convolution on the SVD-reconstructed view, arguing that the complexity should be O(2IJLd) since the SVD-reconstructed view is fully-connected. In fact, this issue has been clearly explained in the **Appendix D.3** in our paper. We also answered a Github issue about it (<a href='https://github.com/HKUDS/LightGCL/issues/3'>issue #3</a>). We hereby clarify again:
 
-*Note: More details for settings can be found in our paper.*
+It is correct that the reconstructed graph is fully connected. However, please note that the reconstructed graph is actually the **product of three low dimension matrices U,S,V'**, whose dimensions are I×q, q×q, q×J, respectively (where q is as small as 5). So we don't really need to compute the reconstructed graph, but just store the three low-dimension matrices. And by doing the matrix multiplication in the following order: US [pre-calculated, complexity not counted into training], V'E [complexity is O(qJd)], and then (US)(V'E) [complexity is O(qId)], we never need to construct that large matrix, and the complexity is proportional to **(I+J)** instead of **(IJ)**.
 
 ### 6. Citing our paper
 Please kindly cite our paper if you find this paper and the codes helpful.
