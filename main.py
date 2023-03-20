@@ -27,7 +27,7 @@ decay = args.decay
 svd_q = args.q
 
 # load data
-path = '../light/data/' + args.data + '/'
+path = 'data/' + args.data + '/'
 f = open(path+'trnMat.pkl','rb')
 train = pickle.load(f)
 train_csr = (train!=0).astype(np.float32)
