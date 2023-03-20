@@ -1,9 +1,10 @@
 import torch
 import torch.nn as nn
 from utils import sparse_dropout, spmm
+import torch.nn.functional as F
 
 class LightGCL(nn.Module):
-    def __init__(self, n_u, n_i, d, u_mul_s, v_mul_s, ut, vt, train_csr, adj_norm, l, temp, lambda_1, dropout, batch_user, device):
+    def __init__(self, n_u, n_i, d, u_mul_s, v_mul_s, ut, vt, train_csr, adj_norm, l, temp, lambda_1, lambda_2, dropout, batch_user, device):
         super(LightGCL,self).__init__()
         self.E_u_0 = nn.Parameter(nn.init.xavier_uniform_(torch.empty(n_u,d)))
         self.E_i_0 = nn.Parameter(nn.init.xavier_uniform_(torch.empty(n_i,d)))
@@ -19,12 +20,14 @@ class LightGCL(nn.Module):
         self.Z_i_list = [None] * (l+1)
         self.G_u_list = [None] * (l+1)
         self.G_i_list = [None] * (l+1)
+        self.G_u_list[0] = self.E_u_0
+        self.G_i_list[0] = self.E_i_0
         self.temp = temp
         self.lambda_1 = lambda_1
+        self.lambda_2 = lambda_2
         self.dropout = dropout
         self.act = nn.LeakyReLU(0.5)
         self.batch_user = batch_user
-        self.Ws = nn.ModuleList([W_contrastive(d) for i in range(l)])
 
         self.E_u = None
         self.E_i = None
@@ -41,76 +44,57 @@ class LightGCL(nn.Module):
             preds = self.E_u[uids] @ self.E_i.T
             mask = self.train_csr[uids.cpu().numpy()].toarray()
             mask = torch.Tensor(mask).cuda(torch.device(self.device))
-            preds = preds * (1-mask)
+            preds = preds * (1-mask) - 1e8 * mask
             predictions = preds.argsort(descending=True)
             return predictions
         else:  # training phase
             for layer in range(1,self.l+1):
                 # GNN propagation
-                self.Z_u_list[layer] = self.act(spmm(sparse_dropout(self.adj_norm,self.dropout), self.E_i_list[layer-1], self.device))
-                self.Z_i_list[layer] = self.act(spmm(sparse_dropout(self.adj_norm,self.dropout).transpose(0,1), self.E_u_list[layer-1], self.device))
-                
+                self.Z_u_list[layer] = (torch.spmm(sparse_dropout(self.adj_norm,self.dropout), self.E_i_list[layer-1]))
+                self.Z_i_list[layer] = (torch.spmm(sparse_dropout(self.adj_norm,self.dropout).transpose(0,1), self.E_u_list[layer-1]))
+
                 # svd_adj propagation
                 vt_ei = self.vt @ self.E_i_list[layer-1]
-                self.G_u_list[layer] = self.act(self.u_mul_s @ vt_ei)
+                self.G_u_list[layer] = (self.u_mul_s @ vt_ei)
                 ut_eu = self.ut @ self.E_u_list[layer-1]
-                self.G_i_list[layer] = self.act(self.v_mul_s @ ut_eu)
+                self.G_i_list[layer] = (self.v_mul_s @ ut_eu)
 
                 # aggregate
-                self.E_u_list[layer] = self.Z_u_list[layer] + self.E_u_list[layer-1]
-                self.E_i_list[layer] = self.Z_i_list[layer] + self.E_i_list[layer-1]
+                self.E_u_list[layer] = self.Z_u_list[layer]
+                self.E_i_list[layer] = self.Z_i_list[layer]
+
+            self.G_u = sum(self.G_u_list)
+            self.G_i = sum(self.G_i_list)
 
             # aggregate across layers
             self.E_u = sum(self.E_u_list)
             self.E_i = sum(self.E_i_list)
 
             # cl loss
-            loss_s = 0
-            for l in range(1,self.l+1):
-                u_mask = (torch.rand(len(uids))>0.5).float().cuda(self.device)
+            G_u_norm = self.G_u
+            E_u_norm = self.E_u
+            G_i_norm = self.G_i
+            E_i_norm = self.E_i
+            neg_score = torch.log(torch.exp(G_u_norm[uids] @ E_u_norm.T / self.temp).sum(1) + 1e-8).mean()
+            neg_score += torch.log(torch.exp(G_i_norm[iids] @ E_i_norm.T / self.temp).sum(1) + 1e-8).mean()
+            pos_score = (torch.clamp((G_u_norm[uids] * E_u_norm[uids]).sum(1) / self.temp,-5.0,5.0)).mean() + (torch.clamp((G_i_norm[iids] * E_i_norm[iids]).sum(1) / self.temp,-5.0,5.0)).mean()
+            loss_s = -pos_score + neg_score
 
-                gnn_u = nn.functional.normalize(self.Z_u_list[l][uids],p=2,dim=1)
-                hyper_u = nn.functional.normalize(self.G_u_list[l][uids],p=2,dim=1)
-                hyper_u = self.Ws[l-1](hyper_u)
-                pos_score = torch.exp((gnn_u*hyper_u).sum(1)/self.temp)
-                neg_score = torch.exp(gnn_u @ hyper_u.T/self.temp).sum(1)
-                loss_s_u = ((-1 * torch.log(pos_score/(neg_score+1e-8) + 1e-8))*u_mask).sum()
-                loss_s = loss_s + loss_s_u
-
-                i_mask = (torch.rand(len(iids))>0.5).float().cuda(self.device)
-
-                gnn_i = nn.functional.normalize(self.Z_i_list[l][iids],p=2,dim=1)
-                hyper_i = nn.functional.normalize(self.G_i_list[l][iids],p=2,dim=1)
-                hyper_i = self.Ws[l-1](hyper_i)
-                pos_score = torch.exp((gnn_i*hyper_i).sum(1)/self.temp)
-                neg_score = torch.exp(gnn_i @ hyper_i.T/self.temp).sum(1)
-                loss_s_i = ((-1 * torch.log(pos_score/(neg_score+1e-8) + 1e-8))*i_mask).sum()
-                loss_s = loss_s + loss_s_i
-            
             # bpr loss
-            loss_r = 0
-            for i in range(len(uids)):
-                u = uids[i]
-                u_emb = self.E_u[u]
-                u_pos = pos[i]
-                u_neg = neg[i]
-                pos_emb = self.E_i[u_pos]
-                neg_emb = self.E_i[u_neg]
-                pos_scores = u_emb @ pos_emb.T
-                neg_scores = u_emb @ neg_emb.T
-                bpr = nn.functional.relu(1-pos_scores+neg_scores)
-                loss_r = loss_r + bpr.sum()
-            loss_r = loss_r/self.batch_user
+            u_emb = self.E_u[uids]
+            pos_emb = self.E_i[pos]
+            neg_emb = self.E_i[neg]
+            pos_scores = (u_emb * pos_emb).sum(-1)
+            neg_scores = (u_emb * neg_emb).sum(-1)
+            loss_r = -(pos_scores - neg_scores).sigmoid().log().mean()
+
+            # reg loss
+            loss_reg = 0
+            for param in self.parameters():
+                loss_reg += param.norm(2).square()
+            loss_reg *= self.lambda_2
 
             # total loss
-            loss = loss_r + self.lambda_1 * loss_s
+            loss = loss_r + self.lambda_1 * loss_s + loss_reg
             #print('loss',loss.item(),'loss_r',loss_r.item(),'loss_s',loss_s.item())
-            return loss, loss_r, loss_s
-
-class W_contrastive(nn.Module):
-    def __init__(self,d):
-        super().__init__()
-        self.W = nn.Parameter(nn.init.xavier_uniform_(torch.empty(d,d)))
-
-    def forward(self,x):
-        return x @ self.W
+            return loss, loss_r, self.lambda_1 * loss_s

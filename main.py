@@ -7,6 +7,8 @@ import pandas as pd
 from parser import args
 from tqdm import tqdm
 import time
+import torch.utils.data as data
+from utils import TrnData
 
 device = 'cuda:' + args.cuda
 
@@ -21,41 +23,47 @@ lambda_1 = args.lambda1
 lambda_2 = args.lambda2
 dropout = args.dropout
 lr = args.lr
+decay = args.decay
 svd_q = args.q
 
 # load data
-path = 'data/' + args.data + '/'
+path = '../light/data/' + args.data + '/'
 f = open(path+'trnMat.pkl','rb')
 train = pickle.load(f)
-#train_np = train.toarray()
 train_csr = (train!=0).astype(np.float32)
 f = open(path+'tstMat.pkl','rb')
 test = pickle.load(f)
-#test_np = test.toarray()
 print('Data loaded.')
 
 print('user_num:',train.shape[0],'item_num:',train.shape[1],'lambda_1:',lambda_1,'lambda_2:',lambda_2,'temp:',temp,'q:',svd_q)
 
 epoch_user = min(train.shape[0], 30000)
 
-adj = scipy_sparse_mat_to_torch_sparse_tensor(train).coalesce().cuda(torch.device(device))
-
-print('Performing SVD...')
-svd_u,s,svd_v = torch.svd_lowrank(adj,q=svd_q)
-u_mul_s = svd_u @ torch.diag(s)
-v_mul_s = svd_v @ torch.diag(s)
-del adj
-del s
-print('SVD done.')
-
+# normalizing the adj matrix
 rowD = np.array(train.sum(1)).squeeze()
 colD = np.array(train.sum(0)).squeeze()
 for i in range(len(train.data)):
     train.data[i] = train.data[i] / pow(rowD[train.row[i]]*colD[train.col[i]], 0.5)
+
+# construct data loader
+train = train.tocoo()
+train_data = TrnData(train)
+train_loader = data.DataLoader(train_data, batch_size=args.inter_batch, shuffle=True, num_workers=0)
+
 adj_norm = scipy_sparse_mat_to_torch_sparse_tensor(train)
 adj_norm = adj_norm.coalesce().cuda(torch.device(device))
 print('Adj matrix normalized.')
 
+# perform svd reconstruction
+adj = scipy_sparse_mat_to_torch_sparse_tensor(train).coalesce().cuda(torch.device(device))
+print('Performing SVD...')
+svd_u,s,svd_v = torch.svd_lowrank(adj, q=svd_q)
+u_mul_s = svd_u @ (torch.diag(s))
+v_mul_s = svd_v @ (torch.diag(s))
+del s
+print('SVD done.')
+
+# process test set
 test_labels = [[] for i in range(test.shape[0])]
 for i in range(len(test.data)):
     row = test.row[i]
@@ -72,57 +80,29 @@ ndcg_20_y = []
 recall_40_y = []
 ndcg_40_y = []
 
-model = LightGCL(adj_norm.shape[0], adj_norm.shape[1], d, u_mul_s, v_mul_s, svd_u.T, svd_v.T, train_csr, adj_norm, l, temp, lambda_1, dropout, batch_user, device)
+model = LightGCL(adj_norm.shape[0], adj_norm.shape[1], d, u_mul_s, v_mul_s, svd_u.T, svd_v.T, train_csr, adj_norm, l, temp, lambda_1, lambda_2, dropout, batch_user, device)
 #model.load_state_dict(torch.load('saved_model.pt'))
 model.cuda(torch.device(device))
-optimizer = torch.optim.Adam(model.parameters(),weight_decay=lambda_2,lr=lr)
+optimizer = torch.optim.Adam(model.parameters(),weight_decay=0,lr=lr)
 #optimizer.load_state_dict(torch.load('saved_optim.pt'))
-
-def learning_rate_decay(optimizer):
-    for param_group in optimizer.param_groups:
-        lr = param_group['lr']*0.98
-        if lr > 0.0005:
-            param_group['lr'] = lr
-    return lr
 
 current_lr = lr
 
 for epoch in range(epoch_no):
     if (epoch+1)%50 == 0:
-        torch.save(model.state_dict(),'saved_model_epoch_'+str(epoch)+'.pt')
-        torch.save(optimizer.state_dict(),'saved_optim_epoch_'+str(epoch)+'.pt')
-
-    current_lr = learning_rate_decay(optimizer)
-        
-    e_users = np.random.permutation(adj_norm.shape[0])[:epoch_user]
-    batch_no = int(np.ceil(epoch_user/batch_user))
+        torch.save(model.state_dict(),'saved_model/saved_model_epoch_'+str(epoch)+'.pt')
+        torch.save(optimizer.state_dict(),'saved_model/saved_optim_epoch_'+str(epoch)+'.pt')
 
     epoch_loss = 0
     epoch_loss_r = 0
     epoch_loss_s = 0
-    for batch in tqdm(range(batch_no)):
-        start = batch*batch_user
-        end = min((batch+1)*batch_user,epoch_user)
-        batch_users = e_users[start:end]
-
-        # sample pos and neg
-        pos = []
-        neg = []
-        iids = set()
-        for i in range(len(batch_users)):
-            u = batch_users[i]
-            u_interact = train_csr[u].toarray()[0]
-            positive_items = np.random.permutation(np.where(u_interact==1)[0])
-            negative_items = np.random.permutation(np.where(u_interact==0)[0])
-            item_num = min(max_samp,len(positive_items))
-            positive_items = positive_items[:item_num]
-            negative_items = negative_items[:item_num]
-            pos.append(torch.LongTensor(positive_items).cuda(torch.device(device)))
-            neg.append(torch.LongTensor(negative_items).cuda(torch.device(device)))
-            iids = iids.union(set(positive_items))
-            iids = iids.union(set(negative_items))
-        iids = torch.LongTensor(list(iids)).cuda(torch.device(device))
-        uids = torch.LongTensor(batch_users).cuda(torch.device(device))
+    train_loader.dataset.neg_sampling()
+    for i, batch in enumerate(tqdm(train_loader)):
+        uids, pos, neg = batch
+        uids = uids.long().cuda(torch.device(device))
+        pos = pos.long().cuda(torch.device(device))
+        neg = neg.long().cuda(torch.device(device))
+        iids = torch.concat([pos, neg], dim=0)
 
         # feed
         optimizer.zero_grad()
@@ -130,13 +110,14 @@ for epoch in range(epoch_no):
         loss.backward()
         optimizer.step()
         #print('batch',batch)
-
-        torch.cuda.empty_cache()
-
         epoch_loss += loss.cpu().item()
         epoch_loss_r += loss_r.cpu().item()
         epoch_loss_s += loss_s.cpu().item()
 
+        torch.cuda.empty_cache()
+        #print(i, len(train_loader), end='\r')
+
+    batch_no = len(train_loader)
     epoch_loss = epoch_loss/batch_no
     epoch_loss_r = epoch_loss_r/batch_no
     epoch_loss_s = epoch_loss_s/batch_no
@@ -222,7 +203,7 @@ metric = pd.DataFrame({
     'ndcg@40':ndcg_40_y
 })
 current_t = time.gmtime()
-metric.to_csv('log/result_'+args.data+'_'+time.strftime('%Y-%m-%d',current_t)+'.csv')
+metric.to_csv('log/result_'+args.data+'_'+time.strftime('%Y-%m-%d-%H',current_t)+'.csv')
 
-torch.save(model.state_dict(),'saved_model/saved_model_'+args.data+'_'+time.strftime('%Y-%m-%d',current_t)+'.pt')
-torch.save(optimizer.state_dict(),'saved_model/saved_optim_'+args.data+'_'+time.strftime('%Y-%m-%d',current_t)+'.pt')
+torch.save(model.state_dict(),'saved_model/saved_model_'+args.data+'_'+time.strftime('%Y-%m-%d-%H',current_t)+'.pt')
+torch.save(optimizer.state_dict(),'saved_model/saved_optim_'+args.data+'_'+time.strftime('%Y-%m-%d-%H',current_t)+'.pt')

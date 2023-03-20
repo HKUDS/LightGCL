@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.utils.data as data
 
 def metrics(uids, predictions, topk, test_labels):
     user_num = 0
@@ -33,6 +34,8 @@ def scipy_sparse_mat_to_torch_sparse_tensor(sparse_mx):
     return torch.sparse.FloatTensor(indices, values, shape)
 
 def sparse_dropout(mat, dropout):
+    if dropout == 0.0:
+        return mat
     indices = mat.indices()
     values = nn.functional.dropout(mat.values(), p=dropout)
     size = mat.size()
@@ -46,3 +49,25 @@ def spmm(sp, emb, device):
     result = torch.zeros((sp.shape[0],emb.shape[1])).cuda(torch.device(device))
     result.index_add_(0, rows, col_segs)
     return result
+
+class TrnData(data.Dataset):
+    def __init__(self, coomat):
+        self.rows = coomat.row
+        self.cols = coomat.col
+        self.dokmat = coomat.todok()
+        self.negs = np.zeros(len(self.rows)).astype(np.int32)
+
+    def neg_sampling(self):
+        for i in range(len(self.rows)):
+            u = self.rows[i]
+            while True:
+                i_neg = np.random.randint(self.dokmat.shape[1])
+                if (u, i_neg) not in self.dokmat:
+                    break
+            self.negs[i] = i_neg
+
+    def __len__(self):
+        return len(self.rows)
+
+    def __getitem__(self, idx):
+        return self.rows[idx], self.cols[idx], self.negs[idx]
