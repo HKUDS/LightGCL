@@ -37,6 +37,10 @@ python main.py --data yelp
 python main.py --data gowalla --lambda2 0
 ```
 
+* ML-10M
+```
+python main.py --data ml10m
+```
 
 ### 4. Some configurable arguments
 
