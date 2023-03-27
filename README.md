@@ -42,6 +42,12 @@ python main.py --data gowalla --lambda2 0
 python main.py --data ml10m --temp 0.5
 ```
 
+* Tmall
+
+```
+python main.py --data tmall --gnn_layer 1
+```
+
 ### 4. Some configurable arguments
 
 * `--cuda` specifies which GPU to run on if there are more than one.
