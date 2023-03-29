@@ -51,7 +51,7 @@ python main.py --data tmall --gnn_layer 1
 * Amazon
 
 ```
-python main.py --data amazon --lr 3e-4 --lambda2 0
+python main.py --data amazon --gnn_layer 1 --lambda2 0
 ```
 
 ### 4. Some configurable arguments
