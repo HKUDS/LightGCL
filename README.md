@@ -48,6 +48,12 @@ python main.py --data ml10m --temp 0.5
 python main.py --data tmall --gnn_layer 1
 ```
 
+* Amazon
+
+```
+python main.py --data amazon --lr 3e-4 --lambda2 0
+```
+
 ### 4. Some configurable arguments
 
 * `--cuda` specifies which GPU to run on if there are more than one.
