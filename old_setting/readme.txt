@@ -1,0 +1,1 @@
+This directory contains the original version of codes when this paper was submitted to ICLR2023, which adopts the old setting. The differences between the old and new settings are mainly on the sampling of the postive and negative items, while the model structure remains unchanged.
